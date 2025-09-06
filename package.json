@@ -1,0 +1,13 @@
+{
+  "name": "pspdev",
+  "version": "1.0.0",
+  "description": "Este guia detalha como configurar um ambiente de desenvolvimento para PSP (PlayStation Portable) usando o PSPDev no Windows Subsystem for Linux (WSL) com Ubuntu.",
+  "main": "gemini.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

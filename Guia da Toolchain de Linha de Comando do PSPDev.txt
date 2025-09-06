@@ -1,0 +1,445 @@
+﻿Com certeza. Como um especialista em sistemas embarcados e na arquitetura MIPS, preparei um guia de referência definitivo para a toolchain do PSPDev, expandindo o material fornecido com seções detalhadas sobre configuração de ambiente, fluxo de trabalho, depuração e outros tópicos avançados.
+
+
+-----
+
+
+## Guia Definitivo da Toolchain de Linha de Comando do PSPDev
+
+
+Este guia serve como uma referência completa e moderna para o desenvolvimento de aplicações *homebrew* para o PlayStation Portable (PSP) utilizando a toolchain de software livre PSPDev. [cite\_start]Fundamentada em ferramentas padrão da indústria como GCC e Binutils [cite: 2][cite\_start], a toolchain oferece um ecossistema robusto para compilar, otimizar e empacotar software para a CPU MIPS Allegrex do PSP[cite: 5, 4].
+
+
+### 1\. Configuração do Ambiente de Desenvolvimento
+
+
+Um ambiente funcional é o primeiro passo. Abaixo estão as instruções para sistemas operacionais modernos.
+
+
+#### 1.1 Windows: WSL 2 (Abordagem Recomendada)
+
+
+O Windows Subsystem for Linux (WSL) oferece um ambiente Linux nativo, tornando-se a forma mais simples e robusta de usar a toolchain no Windows.
+
+
+1.  **Instale o WSL:** Abra o PowerShell como Administrador e execute:
+    ```bash
+    wsl --install
+    ```
+2.  **Instale uma Distribuição Linux:** Recomenda-se o Ubuntu, que pode ser instalado pela Microsoft Store.
+3.  **Instale as Dependências:** Dentro do ambiente Ubuntu no WSL, execute:
+    ```bash
+    sudo apt-get update
+    sudo apt-get install build-essential git wget
+    ```
+4.  **Instale o PSPDev:** Utilize um script de instalação automatizado como o [pspdev-docker](https://github.com/pspdev/pspdev-docker) ou siga os passos para Linux abaixo.
+
+
+#### 1.2 Linux (Debian/Ubuntu)
+
+
+1.  **Instale as Dependências:**
+    ```bash
+    sudo apt-get update
+    sudo apt-get install build-essential libelf-dev git wget
+    ```
+2.  **Baixe e Execute o Script de Instalação:**
+    ```bash
+    wget https://raw.githubusercontent.com/pspdev/pspdev/master/psp-toolchain.sh
+    chmod +x psp-toolchain.sh
+    ./psp-toolchain.sh
+    ```
+3.  **Configure o Ambiente:** Adicione as variáveis de ambiente ao seu `~/.bashrc` ou `~/.zshrc`:
+    ```bash
+    export PSPDEV=/usr/local/pspdev
+    export PSPSDK=$PSPDEV/psp/sdk
+    export PATH=$PATH:$PSPDEV/bin:$PSPSDK/bin
+    ```
+
+
+#### 1.3 macOS (Intel e Apple Silicon)
+
+
+O processo pode exigir o Homebrew e, para Apple Silicon (M1/M2), a execução sob o ambiente de tradução Rosetta 2.
+
+
+1.  **Instale o Homebrew:** Siga as instruções no site oficial [brew.sh](https://brew.sh/).
+2.  **Instale as Dependências:**
+    ```bash
+    brew install wget gcc
+    ```
+3.  **Execute o Script de Instalação:** Siga os mesmos passos do Linux para baixar e executar o `psp-toolchain.sh`.
+
+
+#### 1.4 Docker (Solução Multiplataforma)
+
+
+Usar Docker cria um ambiente isolado e 100% reproduzível, ideal para evitar conflitos de dependência.
+
+
+1.  **Crie um `Dockerfile`:**
+    ```dockerfile
+    FROM ubuntu:20.04
+
+
+    # Previne prompts interativos durante a build
+    ENV DEBIAN_FRONTEND=noninteractive
+
+
+    # Instala dependências
+    RUN apt-get update && apt-get install -y \
+        build-essential \
+        libelf-dev \
+        git \
+        wget \
+        && rm -rf /var/lib/apt/lists/*
+
+
+    # Baixa e executa o script da toolchain
+    WORKDIR /usr/src
+    RUN wget https://raw.githubusercontent.com/pspdev/pspdev/master/psp-toolchain.sh
+    RUN chmod +x psp-toolchain.sh
+    RUN ./psp-toolchain.sh
+
+
+    # Configura variáveis de ambiente
+    ENV PSPDEV=/usr/local/pspdev
+    ENV PSPSDK=$PSPDEV/psp/sdk
+    ENV PATH=$PATH:$PSPDEV/bin:$PSPSDK/bin
+
+
+    # Define o diretório de trabalho para os projetos
+    WORKDIR /project
+    ```
+2.  **Construa a Imagem:**
+    ```bash
+    docker build -t pspdev .
+    ```
+3.  **Execute um Contêiner:** Navegue até o diretório do seu projeto e execute:
+    ```bash
+    docker run --rm -it -v "${PWD}:/project" pspdev bash
+    ```
+    Agora você está dentro de um shell com a toolchain do PSPDev pronta para uso.
+
+
+### 2\. O Fluxo de Trabalho de Desenvolvimento (Workflow)
+
+
+O desenvolvimento para PSP segue um ciclo previsível, geralmente automatizado por um `Makefile`.
+
+
+#### 2.1 Estrutura de um Projeto Típico
+
+
+```
+meu_projeto/
+├── src/
+│   └── main.c
+├── include/
+│   └── main.h
+├── assets/
+│   ├── ICON0.PNG   (Ícone 96x96)
+│   ├── PIC1.PNG    (Fundo 480x272)
+│   └── SND0.AT3    (Som opcional)
+└── Makefile
+```
+
+
+#### 2.2 O Makefile: Automatizando a Compilação
+
+
+O `Makefile` é o coração do projeto, definindo como compilar, limpar e empacotar a aplicação.
+
+
+**Exemplo de Makefile Comentado:**
+
+
+```makefile
+# Título que aparecerá no XMB do PSP
+TARGET = meu_projeto
+TITLE = Meu Projeto Incrível
+
+
+# Diretórios
+OBJS_DIR = objs
+SRC_DIR = src
+
+
+# Lista de arquivos-fonte
+SOURCES = $(wildcard $(SRC_DIR)/*.c)
+OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJS_DIR)/%.o, $(SOURCES))
+
+
+# Define os nomes dos arquivos finais
+EBOOT_PBP = EBOOT.PBP
+PARAM_SFO = PARAM.SFO
+TARGET_ELF = $(TARGET).elf
+
+
+# Inclui as configurações padrão do PSPSDK
+include $(PSPSDK)/lib/build.mak
+
+
+# Flags do compilador
+# [cite_start]-G0: Essencial, não usa o ponteiro global [cite: 10, 11]
+# [cite_start]-Wall: Habilita todos os avisos [cite: 13]
+# [cite_start]-O2: Otimização de nível 2 [cite: 9]
+# -g: Inclui símbolos de depuração (remover para a versão final)
+CFLAGS = -G0 -Wall -O2 -g
+
+
+# Flags do Linker
+# [cite_start]-lpspdebug: Biblioteca para depuração na tela [cite: 16]
+# Adicione outras bibliotecas aqui (ex: -lpspgu -lpspaudio)
+LDFLAGS = -lpspdebug -lpspkernel
+
+
+# Regra principal: o que acontece quando você digita 'make'
+all: $(EBOOT_PBP)
+
+
+# Regra para criar o EBOOT.PBP
+# Depende do ELF e do SFO
+$(EBOOT_PBP): $(TARGET_ELF) $(PARAM_SFO)
+        @echo "--- Empacotando EBOOT.PBP ---"
+        @pack-pbp $(EBOOT_PBP) $(PARAM_SFO) NULL NULL NULL assets/PIC1.PNG assets/SND0.AT3 $(TARGET_ELF) NULL
+
+
+# Regra para criar o PARAM.SFO
+$(PARAM_SFO):
+        @echo "--- Criando PARAM.SFO ---"
+        @mksfoex "$(TITLE)" $(PARAM_SFO)
+
+
+# Regra para linkar e criar o arquivo ELF
+$(TARGET_ELF): $(OBJS)
+        @echo "--- Linkando ELF ---"
+        @psp-gcc $(CFLAGS) -o $(TARGET_ELF) $^ $(LDFLAGS)
+
+
+# Regra para compilar os arquivos-objeto
+$(OBJS_DIR)/%.o: $(SRC_DIR)/%.c
+        @mkdir -p $(@D)
+        @echo "--- Compilando $< ---"
+        @psp-gcc $(CFLAGS) -c $< -o $@
+
+
+# Regra para a versão de Lançamento (Release)
+# [cite_start]Remove símbolos de depuração para reduzir o tamanho [cite: 26]
+release: CFLAGS := $(filter-out -g, $(CFLAGS))
+release: LDFLAGS := $(filter-out -lpspdebug, $(LDFLAGS))
+release: all
+        @echo "--- Otimizando ELF para Lançamento ---"
+        @psp-strip $(TARGET_ELF) --strip-all
+
+
+# Regra de limpeza
+clean:
+        @echo "--- Limpando arquivos gerados ---"
+        @rm -rf $(OBJS_DIR) $(TARGET_ELF) $(EBOOT_PBP) $(PARAM_SFO)
+
+
+# Regra para reconstruir tudo
+rebuild: clean all
+```
+
+
+#### 2.3 Teste e Execução
+
+
+  * **Emulador:** O [PPSSPP](https://www.ppsspp.org/) é o emulador de referência. Simplesmente arraste a pasta do seu projeto (contendo o `EBOOT.PBP`) para a tela do PPSSPP ou coloque-a no diretório `memstick/PSP/GAME/`.
+  * **Hardware Real:** Conecte seu PSP ao computador via USB, navegue até a pasta `PSP/GAME` no Memory Stick e copie a pasta do seu projeto para lá.
+
+
+-----
+
+
+### 3\. Referência Completa de Comandos
+
+
+Esta seção detalha os principais comandos, expandindo as informações do texto base.
+
+
+#### 3.1 A Toolchain Principal: Compilação e Linking
+
+
+| Comando | Finalidade |
+| :--- | :--- |
+| `psp-gcc` | [cite\_start]O compilador C da toolchain, processa arquivos `.c` e `.h` em código de máquina MIPS. [cite: 6, 7] |
+| `psp-g++` | [cite\_start]O compilador C++ da toolchain, para arquivos `.cpp`, `.cc` ou `.cxx`. [cite: 17] |
+| `psp-as` | [cite\_start]Montador (assembler) que converte código assembly MIPS (`.s`) em código de máquina. [cite: 19, 20] |
+| `psp-ld` | [cite\_start]O linker que combina múltiplos arquivos objeto e bibliotecas em um único executável ELF. [cite: 21, 22] |
+
+
+**Flags e Parâmetros Essenciais (`psp-gcc`/`psp-g++`):**
+
+
+  * [cite\_start]`-c`: Compila para um arquivo objeto (`.o`) sem linkar. [cite: 8]
+  * `-o <arquivo>`: Especifica o nome do arquivo de saída.
+  * [cite\_start]`-G0`: **Crucial.** Impede o uso do registrador de ponteiro global ($gp), que é reservado pelo kernel do PSP. [cite: 10, 11, 12]
+  * [cite\_start]`-Wall`, `-Wextra`: Habilitam avisos do compilador, ajudando a encontrar erros potenciais. [cite: 13] `-Werror` trata avisos como erros, forçando um código mais limpo.
+  * `-O<nível>`: Nível de otimização.
+      * [cite\_start]`-O2`: Bom equilíbrio entre velocidade e tamanho. [cite: 9]
+      * `-O3`: Otimização de velocidade agressiva.
+      * [cite\_start]`-Os`: Otimiza para o menor tamanho de código possível, muito importante em sistemas com memória limitada[cite: 25].
+  * `-g`: Inclui informações de depuração no executável, necessário para usar `psp-gdb`.
+  * [cite\_start]`-I<dir>`: Adiciona um diretório para busca de arquivos de cabeçalho (`#include`). [cite: 14]
+  * [cite\_start]`-L<dir>`: Adiciona um diretório para busca de bibliotecas na fase de linking. [cite: 15]
+  * [cite\_start]`-l<lib>`: Vincula (linka) uma biblioteca específica, como `-lpspdebug`. [cite: 16]
+
+
+**Exemplo Prático (Compilação e Linking):**
+
+
+```bash
+# Compila dois arquivos fonte em arquivos objeto
+psp-gcc -Iinclude -G0 -Wall -c src/main.c -o objs/main.o
+psp-gcc -Iinclude -G0 -Wall -c src/player.c -o objs/player.o
+
+
+# Linka os objetos com bibliotecas para criar o ELF final
+psp-gcc -G0 -o mygame.elf objs/main.o objs/player.o -L/path/to/libs -lpspgu -lpspaudio
+```
+
+
+-----
+
+
+#### 3.2 Utilitários de Manipulação de Binários
+
+
+| Comando | Finalidade | Sintaxe Básica |
+| :--- | :--- | :--- |
+| `psp-strip` | [cite\_start]Remove informações não essenciais (símbolos, depuração) de um ELF para reduzir seu tamanho. [cite: 26] | [cite\_start]`psp-strip <entrada.elf>` [cite: 56] |
+| `psp-objcopy` | [cite\_start]Copia e traduz arquivos objeto, útil para manipulação de seções. [cite: 30] | `psp-objcopy [opções] <entrada> <saída>` |
+| `psp-objdump` | [cite\_start]Exibe informações de arquivos objeto, incluindo a desmontagem (disassembly) do código. [cite: 31, 57] | [cite\_start]`psp-objdump -D <arquivo.elf>` [cite: 32] |
+| `psp-size` | [cite\_start]Lista o tamanho das seções (`.text`, `.data`, `.bss`) de um executável. [cite: 33] | `psp-size <arquivo.elf>` |
+| `psp-nm` | [cite\_start]Lista os símbolos (funções, variáveis) de um arquivo objeto. [cite: 34] | `psp-nm <arquivo.elf>` |
+
+
+**Exemplo Prático (`psp-strip`):**
+
+
+```bash
+# Cria uma cópia otimizada do ELF, removendo todos os símbolos
+psp-strip --strip-all mygame.elf -o mygame_release.elf
+```
+
+
+-----
+
+
+#### 3.3 Ferramentas de Empacotamento
+
+
+| Comando | Finalidade | Sintaxe Básica |
+| :--- | :--- | :--- |
+| `mksfo` / `mksfoex` | [cite\_start]Cria o arquivo de metadados `PARAM.SFO` com o título e outras informações do aplicativo. [cite: 35, 59] | [cite\_start]`mksfoex 'Título do App' PARAM.SFO` [cite: 36] |
+| `pack-pbp` | [cite\_start]Empacota todos os componentes (SFO, ELF, ícones, etc.) no executável final `EBOOT.PBP`. [cite: 37, 38, 60] | `pack-pbp <saida.pbp> <sfo> ... <elf>` |
+| `unpack-pbp` | [cite\_start]Extrai os arquivos individuais de um `EBOOT.PBP` existente. [cite: 40, 61] | `unpack-pbp <entrada.pbp>` |
+
+
+**Exemplo Prático (Empacotamento Manual):**
+
+
+```bash
+# 1. Criar o SFO
+mksfoex 'Meu Jogo de Teste' PARAM.SFO
+
+
+# 2. Empacotar o PBP (usando NULL para assets não existentes)
+pack-pbp EBOOT.PBP PARAM.SFO ICON0.PNG NULL NULL PIC1.PNG NULL mygame.elf NULL
+```
+
+
+-----
+
+
+#### 3.4 Geração de Módulos e Bibliotecas (PRX)
+
+
+[cite\_start]O PSP utiliza um sistema de módulos dinâmicos (PRX), análogos às DLLs ou `.so`. [cite: 44]
+
+
+| Comando | Finalidade | Sintaxe Básica |
+| :--- | :--- | :--- |
+| `psp-build-exports` | [cite\_start]Gera código C para a tabela de exportação de uma biblioteca a partir de um arquivo de definição. [cite: 46, 47, 63] | [cite\_start]`psp-build-exports -b <in.exp> > <out.c>` [cite: 48] |
+| `psp-prxgen` | [cite\_start]Converte um ELF relocável no formato final de módulo PRX. [cite: 49, 62] | [cite\_start]`psp-prxgen <entrada.elf> <saida.prx>` [cite: 49] |
+| `psp-fixup-imports` | [cite\_start]Otimiza um módulo removendo referências a funções importadas não utilizadas. [cite: 50, 64] | [cite\_start]`psp-fixup-imports <arquivo.elf>` [cite: 51] |
+
+
+-----
+
+
+#### 3.5 Outros Utilitários
+
+
+| Comando | Finalidade | Sintaxe Básica |
+| :--- | :--- | :--- |
+| `psp-config` | [cite\_start]Script que fornece caminhos de instalação do SDK, essencial para `Makefiles` portáteis. [cite: 41, 42, 58] | [cite\_start]`psp-config --pspsdk-path` [cite: 43] |
+| `bin2c` / `bin2o` | [cite\_start]Converte um arquivo binário (imagem, som, etc.) em um array C ou arquivo objeto para ser embutido no executável. [cite: 52, 65] | [cite\_start]`bin2c <entrada> <saida.c> <nome_array>` [cite: 53] |
+
+
+### 4\. Tópicos Avançados
+
+
+#### 4.1 Depuração com psp-gdb e PPSSPP
+
+
+Depurar código diretamente é muito mais eficiente do que usar `printf`.
+
+
+1.  **Compile com Símbolos:** Adicione a flag `-g` às suas `CFLAGS` no `Makefile`.
+2.  **Inicie o PPSSPP com o Depurador:**
+    ```bash
+    # Em Linux/macOS
+    ./PPSSPP --debugger
+
+
+    # No Windows, crie um atalho e adicione --debugger ao campo "Destino"
+    ```
+3.  **Carregue o Jogo:** Inicie seu homebrew no PPSSPP. O emulador irá pausar, aguardando uma conexão do GDB.
+4.  **Inicie o psp-gdb:** Em um terminal separado, no diretório do seu projeto, execute:
+    ```bash
+    psp-gdb meu_projeto.elf
+    ```
+5.  **Conecte ao PPSSPP:** Dentro do GDB, conecte-se ao depurador remoto do PPSSPP (geralmente na porta 10000):
+    ```gdb
+    (gdb) target remote :10000
+    ```
+6.  **Depure:** Agora você pode usar comandos GDB padrão:
+      * `b main`: Define um breakpoint na função `main`.
+      * `c`: Continua a execução até o próximo breakpoint.
+      * `n`: Executa a próxima linha (step over).
+      * `s`: Entra em uma função (step into).
+      * `p minha_variavel`: Imprime o valor de uma variável.
+      * `bt`: Mostra o backtrace da pilha de chamadas.
+
+
+#### 4.2 Criação de Módulos (PRX) em Detalhes
+
+
+Criar um PRX permite separar funcionalidades em bibliotecas dinâmicas, como um plugin de áudio ou um motor de física.
+
+
+**O Conceito de Stubs e Exports:**
+
+
+  * **Exports (`.exp`):** Um arquivo de texto que define quais funções do seu PRX serão visíveis para outras aplicações.
+  * **Stubs (`.S`):** Para que sua aplicação principal possa compilar, ela precisa "saber" sobre as funções do PRX sem, de fato, linkar o PRX inteiro. Os stubs são pequenos arquivos assembly gerados que agem como placeholders para as funções exportadas.
+
+
+**Fluxo de Trabalho Simplificado para criar e usar um PRX:**
+
+
+1.  **Criar o PRX (`meu_plugin.prx`):**
+      * Escreva o código fonte do plugin (`plugin.c`).
+      * Crie um arquivo de exportação (`plugin.exp`) listando as funções a serem exportadas.
+      * Use `psp-build-exports` para gerar `exports.c` a partir do `.exp`.
+      * Compile `plugin.c` e `exports.c` juntos, usando flags especiais (`-fPIC`, `-mno-abicalls`) para gerar um ELF relocável.
+      * Use `psp-prxgen` para converter o ELF final em `meu_plugin.prx`.
+2.  **Criar os Stubs:** Use as ferramentas do SDK para gerar os arquivos stub (`.S`) a partir do ELF do PRX.
+3.  **Criar a Aplicação Principal (`EBOOT.PBP`):**
+      * No código da aplicação, carregue o PRX usando as funções do `pspkernel` (`sceKernelLoadModule`).
+      * Inicie o módulo e chame as funções dele.
+      * Ao compilar a aplicação principal, inclua os arquivos stub (`.S`) gerados na etapa 2. O linker usará os stubs para resolver as chamadas de função, entendendo que elas estarão disponíveis em tempo de execução após o carregamento do módulo.
