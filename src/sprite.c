@@ -1,5 +1,6 @@
 // src/sprite.c
 #include "sprite.h"
+#include "graphics.h"
 #include <stdio.h> // Para fopen
 
 // A função load_sprite original vai aqui, com uma pequena modificação para retornar sucesso/falha
@@ -59,7 +60,7 @@ int load_sprite(Sprite* sprite, const char* filename) {
 
 void draw_sprite(int sx, int sy, Sprite* sprite) {
     if (!sprite || !sprite->data) return;
-    unsigned int* vram = (unsigned int*)sceGeEdramGetAddr() + sx + sy * VRAM_BUFFER_WIDTH;
+    unsigned int* vram = (unsigned int*)get_draw_buffer() + sx + sy * VRAM_BUFFER_WIDTH;
     for (int y = 0; y < sprite->height; y++) {
         for (int x = 0; x < sprite->width; x++) {
             unsigned int pixel = sprite->data[y * sprite->width + x];
