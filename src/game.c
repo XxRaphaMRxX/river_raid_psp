@@ -1,4 +1,5 @@
 // src/game.c
+#include <pspdebug.h> // Este include está correto e deve permanecer
 #include "game.h"
 #include "player.h"
 #include "enemy.h"
@@ -23,6 +24,8 @@ int game_over;
 
 // Declaração externa de `first_generate_river` para uso único na inicialização
 extern void first_generate_river(Wall walls[], River* river);
+// Declaração externa da nova função de graphics.h
+extern void* get_draw_buffer();
 
 void init_game() {
     // Carrega Sprites
@@ -42,10 +45,15 @@ void init_game() {
     
     score = 0;
     game_over = 0;
+
+    // Inicializa a tela de debug uma vez
+    pspDebugScreenInit();
+    // Garante que a cor do texto seja branca e visível
+    pspDebugScreenSetTextColor(0xFFFFFFFF); 
 }
 
 void check_collisions() {
-    // Colisão Bala -> Inimigo
+    // (O conteúdo desta função não muda)
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].active) continue;
         for (int j = 0; j < MAX_ENEMIES; j++) {
@@ -60,8 +68,6 @@ void check_collisions() {
             }
         }
     }
-
-    // Colisão Player -> Parede
     for (int i = 0; i < MAX_WALLS; i++) {
         if (!walls[i].active) continue;
         if (player.x < walls[i].x + WALL_BLOCK_SIZE &&
@@ -71,8 +77,6 @@ void check_collisions() {
             game_over = 1;
         }
     }
-
-    // Colisão Player -> Inimigo
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (!enemies[i].active) continue;
         if (player.x < enemies[i].x + enemies[i].sprite->width &&
@@ -98,6 +102,10 @@ void update_game() {
 }
 
 void draw_game() {
+    // Aponta a tela de debug para o buffer de desenho correto ANTES de desenhar qualquer coisa.
+    // ESTA É A LINHA QUE FOI CORRIGIDA:
+    pspDebugScreenSetBase(get_draw_buffer());
+
     clear_screen(0xFF70483C); // Cor do rio
 
     draw_scenario(walls);
@@ -105,7 +113,7 @@ void draw_game() {
     draw_bullets(bullets);
     draw_player(&player);
 
-    pspDebugScreenInit();
+    // Agora desenha o texto sobre o jogo
     pspDebugScreenSetXY(0, 0);
     pspDebugScreenPrintf("Score: %d", score);
 

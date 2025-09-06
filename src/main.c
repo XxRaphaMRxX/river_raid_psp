@@ -1,7 +1,7 @@
 // src/main.c
 #include "defines.h"
 #include "graphics.h"
-#include "game.h"
+#include "game.h" // Garanta que esta linha inclui "game.h" e não "game.c"
 
 PSP_MODULE_INFO("RiverRaid", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -27,8 +27,7 @@ void setup_callbacks(void) {
     }
 }
 
-// Declaração da função de input de game.c
-void handle_game_input(SceCtrlData* pad);
+// A declaração de handle_game_input já está em game.h, não precisa ser repetida aqui.
 
 int main(void) {
     setup_callbacks();
